@@ -54,8 +54,8 @@ function matchingPage() {
 }
 
 function connect() {
-  //ws = new WebSocket(`ws://${location.hostname}:8080`);
-  ws = new WebSocket(`wss://${location.hostname}`);
+  const proto = location.protocol === 'https:' ? 'wss' : 'ws';
+  ws = new WebSocket(`${proto}://${location.host}`);
   ws.onopen = () => {
     ws.send(JSON.stringify({ type: 'join', roomId, name: playerName }));
     if (isHost) {

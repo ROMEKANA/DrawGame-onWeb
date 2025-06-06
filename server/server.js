@@ -1,18 +1,20 @@
 const express = require('express');
 const path = require('path');
+const http = require('http');
 const WebSocket = require('ws');
 
 const app = express();
 const PORT = process.env.PORT || 3000;
-const WSPORT = process.env.WSPORT || 8080;
 
 app.use(express.static(path.join(__dirname, '..', 'public')));
 
-const server = app.listen(PORT, () => {
-  console.log(`HTTP server listening on http://localhost:${PORT}`);
-});
+const server = http.createServer(app);
 
-const wss = new WebSocket.Server({ port: WSPORT });
+const wss = new WebSocket.Server({ server });
+
+server.listen(PORT, () => {
+  console.log(`Server listening on http://localhost:${PORT}`);
+});
 
 const rooms = {};
 const { tops, bottoms } = require('./prompts.json');
@@ -133,4 +135,4 @@ function shuffle(arr) {
   return arr;
 }
 
-console.log(`WebSocket server running on ws://localhost:${WSPORT}`);
+console.log(`WebSocket server running on ws://localhost:${PORT}`);

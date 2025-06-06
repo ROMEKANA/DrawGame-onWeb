@@ -13,8 +13,11 @@ npm install
 npm start
 ```
 
-The server serves the static files in `public/` on http://localhost:3000
-and listens for WebSocket connections on `ws://localhost:8080`.
+The server serves the static files in `public/` and listens for
+WebSocket connections on the same port. By default this is
+`http://localhost:3000` (or the value of the `PORT` environment
+variable). The WebSocket URL will therefore be `ws://localhost:3000`
+when running locally.
 
 Open your browser at `http://localhost:3000` to play. Enter a player name
 and room ID to join a room. The first player can create a room and start
