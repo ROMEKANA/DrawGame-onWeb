@@ -1,29 +1,24 @@
 const express = require('express');
-const path = require('path');
+const http = require('http');
 const WebSocket = require('ws');
+const path = require('path');
 
 const app = express();
 const PORT = process.env.PORT || 3000;
-const WSPORT = process.env.WSPORT || 8080;
 
-app.use(express.static(path.join(__dirname, '..', 'public')));
+app.use(express.static(path.join(__dirname, 'public')));
 
-const server = app.listen(PORT, () => {
-  console.log(`HTTP server listening on http://localhost:${PORT}`);
-});
+const server = http.createServer(app);
+const wss = new WebSocket.Server({ server });
 
-const wss = new WebSocket.Server({ port: WSPORT });
-
-const rooms = {};
-const { tops, bottoms } = require('./prompts.json');
+const room = { id: 'main', players: [], currentDrawer: -1, state: 'wait' };
+const { tops, bottoms } = require('./server/prompts.json');
 
 function randomChoice(arr) {
   return arr[Math.floor(Math.random() * arr.length)];
 }
 
-function broadcast(roomId, data) {
-  const room = rooms[roomId];
-  if (!room) return;
+function broadcast(data) {
   const msg = JSON.stringify(data);
   room.players.forEach(p => {
     if (p.ws.readyState === WebSocket.OPEN) {
@@ -32,7 +27,11 @@ function broadcast(roomId, data) {
   });
 }
 
-function startRound(room) {
+function updatePlayers() {
+  broadcast({ type: 'players', names: room.players.map(p => p.name) });
+}
+
+function startRound() {
   if (room.players.length === 0) return;
   room.state = 'drawing';
   room.currentDrawer = (room.currentDrawer + 1) % room.players.length;
@@ -40,13 +39,13 @@ function startRound(room) {
   room.titles = {};
   room.answers = {};
   const drawer = room.players[room.currentDrawer];
-  broadcast(room.id, { type: 'roundStart', drawer: drawer.name });
+  broadcast({ type: 'roundStart', drawer: drawer.name });
   if (drawer.ws.readyState === WebSocket.OPEN) {
     drawer.ws.send(JSON.stringify({ type: 'prompt', prompt: room.prompt }));
   }
 }
 
-function finishRound(room) {
+function finishRound() {
   room.state = 'result';
   const results = [];
   for (const player of room.players) {
@@ -62,12 +61,12 @@ function finishRound(room) {
       results.push({ player: player.name, correct: false, chose: ans });
     }
   }
-  broadcast(room.id, {
+  broadcast({
     type: 'roundEnd',
     results,
     scores: room.players.map(p => ({ name: p.name, score: p.score }))
   });
-  startRound(room);
+  startRound();
 }
 
 wss.on('connection', ws => {
@@ -75,41 +74,35 @@ wss.on('connection', ws => {
     let data;
     try { data = JSON.parse(msg); } catch { return; }
     if (data.type === 'join') {
-      const id = data.roomId;
-      if (!rooms[id]) {
-        rooms[id] = { id, players: [], currentDrawer: -1, state: 'wait' };
-      }
-      const room = rooms[id];
-      room.players.push({ ws, name: data.name, score: 0 });
-      ws.roomId = id;
+      const player = { ws, name: data.name, score: 0 };
+      room.players.push(player);
       ws.playerName = data.name;
-      broadcast(id, { type: 'system', msg: `${data.name} joined` });
+      broadcast({ type: 'system', msg: `${data.name} joined` });
+      updatePlayers();
     } else {
-      const room = rooms[ws.roomId];
-      if (!room) return;
       switch (data.type) {
         case 'start':
-          if (room.state === 'wait') startRound(room);
+          if (room.state === 'wait' && room.players.length >= 3) startRound();
           break;
         case 'draw':
-          broadcast(room.id, { type: 'draw', data: data.data });
+          broadcast({ type: 'draw', data: data.data });
           break;
         case 'finish':
           room.state = 'titles';
-          broadcast(room.id, { type: 'enterTitles' });
+          broadcast({ type: 'enterTitles' });
           break;
         case 'title':
           room.titles[ws.playerName] = data.text;
           if (Object.keys(room.titles).length === room.players.length - 1) {
             const opts = [room.prompt, ...Object.values(room.titles)];
             room.state = 'guess';
-            broadcast(room.id, { type: 'choose', options: shuffle(opts) });
+            broadcast({ type: 'choose', options: shuffle(opts) });
           }
           break;
         case 'answer':
           room.answers[ws.playerName] = data.text;
           if (Object.keys(room.answers).length === room.players.length - 1) {
-            finishRound(room);
+            finishRound();
           }
           break;
       }
@@ -117,11 +110,8 @@ wss.on('connection', ws => {
   });
 
   ws.on('close', () => {
-    const id = ws.roomId;
-    if (!id) return;
-    const room = rooms[id];
-    if (!room) return;
     room.players = room.players.filter(p => p.ws !== ws);
+    updatePlayers();
   });
 });
 
@@ -133,4 +123,6 @@ function shuffle(arr) {
   return arr;
 }
 
-console.log(`WebSocket server running on ws://localhost:${WSPORT}`);
+server.listen(PORT, () => {
+  console.log(`Server listening on http://localhost:${PORT}`);
+});
