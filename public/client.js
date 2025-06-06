@@ -54,8 +54,11 @@ function matchingPage() {
 }
 
 function connect() {
-  const proto = location.protocol === 'https:' ? 'wss' : 'ws';
-  ws = new WebSocket(`${proto}://${location.host}`);
+  // Build the WebSocket URL based on the current page protocol/host so
+  // it works in both local (http/ws) and production (https/wss) setups.
+  const wsProtocol = location.protocol === 'https:' ? 'wss:' : 'ws:';
+  const wsUrl = `${wsProtocol}//${location.host}`;
+  ws = new WebSocket(wsUrl);
   ws.onopen = () => {
     ws.send(JSON.stringify({ type: 'join', roomId, name: playerName }));
     if (isHost) {
