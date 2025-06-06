@@ -15,12 +15,11 @@ const server = app.listen(PORT, () => {
 const wss = new WebSocket.Server({ port: WSPORT });
 
 const rooms = {};
-const prompts = [
-  'Flying cat',
-  'Running dog',
-  'Jumping fox',
-  'Dancing bear'
-];
+const { tops, bottoms } = require('./prompts.json');
+
+function randomChoice(arr) {
+  return arr[Math.floor(Math.random() * arr.length)];
+}
 
 function broadcast(roomId, data) {
   const room = rooms[roomId];
@@ -37,7 +36,7 @@ function startRound(room) {
   if (room.players.length === 0) return;
   room.state = 'drawing';
   room.currentDrawer = (room.currentDrawer + 1) % room.players.length;
-  room.prompt = prompts[Math.floor(Math.random() * prompts.length)];
+  room.prompt = `${randomChoice(tops)}${randomChoice(bottoms)}`;
   room.titles = {};
   room.answers = {};
   const drawer = room.players[room.currentDrawer];
